@@ -15,6 +15,7 @@ import rootScope from '../rootScope';
 import GroupCallInstance from './groupCallInstance';
 import GROUP_CALL_STATE from './groupCallState';
 import createMainStreamManager from './helpers/createMainStreamManager';
+import LiveStreamInstance from './liveStreamInstance';
 import {generateSsrc} from './localConferenceDescription';
 import {WebRTCLineType} from './sdpBuilder';
 import StreamManager from './streamManager';
@@ -46,12 +47,16 @@ export function generateSelfVideo(source: Ssrc, audioSource?: number): GroupCall
   };
 }
 
+export type LiveStreamId = string | number;
+
 export class GroupCallsController extends EventListenerBase<{
   instance: (instance: GroupCallInstance) => void
+  liveStream: (instance: LiveStreamInstance) => void
 }> {
   private audioAsset: ReturnType<typeof getGroupCallAudioAsset>;
   private log: ReturnType<typeof logger>;
   private currentGroupCall: GroupCallInstance;
+  private currentLiveStream: LiveStreamInstance;
   private managers: AppManagers;
 
   public construct(managers: AppManagers) {
@@ -60,12 +65,20 @@ export class GroupCallsController extends EventListenerBase<{
     this.log = logger('GCC');
 
     rootScope.addEventListener('group_call_update', (groupCall) => {
-      const {currentGroupCall} = this;
+      const {currentGroupCall, currentLiveStream} = this;
       if(currentGroupCall?.id === groupCall.id) {
         currentGroupCall.groupCall = groupCall;
 
         if(groupCall._ === 'groupCallDiscarded') {
           currentGroupCall.hangUp(false, false, true);
+        }
+      }
+
+      if(currentLiveStream?.id === groupCall.id) {
+        currentLiveStream.groupCall = groupCall;
+
+        if(groupCall._ === 'groupCallDiscarded') {
+          // currentLiveStream.hangUp(false, false, true);
         }
       }
     });
@@ -82,11 +95,23 @@ export class GroupCallsController extends EventListenerBase<{
     return this.currentGroupCall;
   }
 
+  get liveStream() {
+    return this.currentLiveStream;
+  }
+
   public setCurrentGroupCall(groupCall: GroupCallInstance) {
     this.currentGroupCall = groupCall;
 
     if(groupCall) {
       this.dispatchEvent('instance', groupCall);
+    }
+  }
+
+  public setCurrentLiveStream(liveStream: LiveStreamInstance) {
+    this.currentLiveStream = liveStream;
+
+    if(liveStream) {
+      this.dispatchEvent('liveStream', liveStream);
     }
   }
 
@@ -246,6 +271,17 @@ export class GroupCallsController extends EventListenerBase<{
 
       return connectionInstance.negotiate();
     }
+  }
+
+  public async joinLiveStream(chatId: ChatId, groupCallId: GroupCallId) {
+    const liveStream = new LiveStreamInstance({
+      id: groupCallId,
+      chatId,
+      managers: this.managers
+    });
+    liveStream.groupCall = await this.managers.appGroupCallsManager.getGroupCallFull(groupCallId);
+
+    this.setCurrentLiveStream(liveStream);
   }
 }
 

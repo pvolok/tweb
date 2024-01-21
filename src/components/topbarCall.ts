@@ -29,6 +29,10 @@ import {AppManagers} from '../lib/appManagers/managers';
 import groupCallsController from '../lib/calls/groupCallsController';
 import StreamManager from '../lib/calls/streamManager';
 import callsController from '../lib/calls/callsController';
+import LiveStreamInstance from '../lib/calls/liveStreamInstance';
+import LiveStreamTitleElement from './groupCall/liveStreamTitle';
+import LiveStreamDescriptionElement from './groupCall/liveStreamDescription';
+import PopupLiveStream from './groupCall/liveStream';
 
 function convertCallStateToGroupState(state: CALL_STATE, isMuted: boolean) {
   switch(state) {
@@ -50,13 +54,15 @@ export default class TopbarCall {
   private weave: TopbarWeave;
   private center: HTMLDivElement;
   private groupCallTitle: GroupCallTitleElement;
+  private liveStreamTitle: LiveStreamTitleElement;
   private groupCallDescription: GroupCallDescriptionElement;
+  private liveStreamDescription: LiveStreamDescriptionElement;
   private groupCallMicrophoneIconMini: GroupCallMicrophoneIconMini;
   private callDescription: CallDescriptionElement;
 
-  private currentDescription: GroupCallDescriptionElement | CallDescriptionElement;
+  private currentDescription: GroupCallDescriptionElement | LiveStreamDescriptionElement | CallDescriptionElement;
 
-  private instance: GroupCallInstance | any/* CallInstance */;
+  private instance: GroupCallInstance | LiveStreamInstance | any/* CallInstance */;
   private instanceListenerSetter: ListenerSetter;
 
   constructor(
@@ -80,8 +86,12 @@ export default class TopbarCall {
       this.updateInstance(instance);
     });
 
+    listenerSetter.add(groupCallsController)('liveStream', (instance) => {
+      this.updateInstance(instance);
+    });
+
     listenerSetter.add(rootScope)('group_call_update', (groupCall) => {
-      const instance = groupCallsController.groupCall;
+      const instance = groupCallsController.groupCall || groupCallsController.liveStream;
       if(instance?.id === groupCall.id) {
         this.updateInstance(instance);
       }
@@ -135,6 +145,8 @@ export default class TopbarCall {
 
       if(instance instanceof GroupCallInstance) {
         this.currentDescription = this.groupCallDescription;
+      } else if(instance instanceof LiveStreamInstance) {
+        this.currentDescription = this.liveStreamDescription;
       } else {
         this.currentDescription = this.callDescription;
         this.instanceListenerSetter.add(instance)('muted', this.onState);
@@ -144,7 +156,9 @@ export default class TopbarCall {
     }
 
     const isMuted = this.instance.isMuted;
-    const state = instance instanceof GroupCallInstance ? instance.state : convertCallStateToGroupState(instance.connectionState, isMuted);
+    const state = instance instanceof GroupCallInstance ? instance.state :
+      instance instanceof LiveStreamInstance ? GROUP_CALL_STATE.MUTED :
+      convertCallStateToGroupState(instance.connectionState, isMuted);
 
     const {weave} = this;
 
@@ -200,6 +214,8 @@ export default class TopbarCall {
   private setTitle(instance: TopbarCall['instance']) {
     if(instance instanceof GroupCallInstance) {
       return this.groupCallTitle.update(instance);
+    } else if(instance instanceof LiveStreamInstance) {
+      return this.liveStreamTitle.update(instance);
     } else {
       replaceContent(this.center, new PeerTitle({peerId: instance.interlocutorUserId.toPeerId()}).element);
     }
@@ -232,7 +248,9 @@ export default class TopbarCall {
     center.classList.add(CLASS_NAME + '-center');
 
     this.groupCallTitle = new GroupCallTitleElement(center);
+    this.liveStreamTitle = new LiveStreamTitleElement(center);
     this.groupCallDescription = new GroupCallDescriptionElement(left);
+    this.liveStreamDescription = new LiveStreamDescriptionElement(left);
 
     this.callDescription = new CallDescriptionElement(left);
 
@@ -264,6 +282,12 @@ export default class TopbarCall {
         }
 
         PopupElement.createPopup(PopupGroupCall).show();
+      } else if(this.instance instanceof LiveStreamInstance) {
+        if(PopupElement.getPopups(PopupLiveStream).length) {
+          return;
+        }
+
+        PopupElement.createPopup(PopupLiveStream).show();
       } else if(this.instance instanceof CallInstance) {
         const popups = PopupElement.getPopups(PopupCall);
         if(popups.find((popup) => popup.getCallInstance() === this.instance)) {

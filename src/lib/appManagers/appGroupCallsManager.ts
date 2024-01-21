@@ -242,8 +242,9 @@ export class AppGroupCallsManager extends AppManager {
     return call;
   }
 
-  public async createGroupCall(chatId: ChatId, scheduleDate?: number, title?: string) {
+  public async createGroupCall(chatId: ChatId, scheduleDate?: number, title?: string, rtmp?: boolean) {
     const updates = await this.apiManager.invokeApi('phone.createGroupCall', {
+      rtmp_stream: rtmp,
       peer: this.appPeersManager.getInputPeerById(chatId.toPeerId(true)),
       random_id: nextRandomUint(32),
       schedule_date: scheduleDate,
@@ -281,6 +282,17 @@ export class AppGroupCallsManager extends AppManager {
   //     peer: this.appPeersManager.getOutputPeer(rootScope.myId)
   //   };
   // }
+
+  public async getRtmpUrl(peerId: PeerId) {
+    const inputPeer = this.appPeersManager.getInputPeerById(peerId);
+    return this.apiManager.invokeApiSingleProcess({
+      method: 'phone.getGroupCallStreamRtmpUrl',
+      params: {
+        peer: inputPeer,
+        revoke: false
+      }
+    });
+  }
 
   public async getGroupCallParticipants(id: GroupCallId) {
     const {nextOffset, setNextOffset} = this.prepareToSavingNextOffset(id);
