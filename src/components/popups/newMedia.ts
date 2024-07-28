@@ -54,6 +54,9 @@ import {ChatType} from '../chat/chat';
 import pause from '../../helpers/schedulers/pause';
 import {Accessor, createRoot, createSignal, Setter} from 'solid-js';
 import SelectedEffect from '../chat/selectedEffect';
+import AppMediaEditor from '../appMediaEditor/appMediaEditor';
+
+import editImage from '../appMediaEditor/images/filters.svg?raw';
 
 type SendFileParams = SendFileDetails & {
   file?: File,
@@ -92,6 +95,8 @@ export default class PopupNewMedia extends PopupElement {
   private animationGroup: AnimationItemGroup;
   private _scrollable: Scrollable;
   private inputContainer: HTMLDivElement;
+
+  private mediaEditor: AppMediaEditor | null = null;
 
   constructor(
     private chat: Chat,
@@ -799,6 +804,14 @@ export default class PopupNewMedia extends PopupElement {
       itemDiv.append(img);
       const url = params.objectURL = await apiManagerProxy.invoke('createObjectURL', file);
 
+      const editBtn = document.createElement('div');
+      editBtn.classList.add('popup-item-media-edit')
+      editBtn.innerHTML = editImage;
+      attachClickEvent(editBtn, () => {
+        this.showMediaEditor(img, params);
+      });
+      itemDiv.append(editBtn);
+
       await renderImageFromUrlPromise(img, url);
       const mimeType = params.file.type as MTMimeType;
       const scaled = await this.scaleImageForTelegram(img, mimeType, true);
@@ -1092,6 +1105,26 @@ export default class PopupNewMedia extends PopupElement {
       this.onScroll();
     });
   }
+
+  showMediaEditor = (img: HTMLImageElement, params: SendFileParams) => {
+    this.mediaEditor = new AppMediaEditor(img);
+    this.mediaEditor.addEventListener('close', this.hideMediaEditor);
+    this.mediaEditor.addEventListener('confirm', (blob) => {
+      const objectUrl = URL.createObjectURL(blob);
+      params.scaledBlob = blob;
+      params.objectURL = objectUrl;
+      img.src = objectUrl;
+      this.hideMediaEditor();
+    });
+    this.mediaEditor.attachTo(document.body);
+  };
+
+  hideMediaEditor = () => {
+    if(this.mediaEditor) {
+      this.mediaEditor.detach();
+      this.mediaEditor = null;
+    }
+  };
 }
 
 (window as any).PopupNewMedia = PopupNewMedia;

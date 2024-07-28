@@ -85,6 +85,19 @@
   }
 }
 
+.popup-item-media-edit {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background: #000000aa;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .popup-new-media.popup-send-photo {
   .popup-container {
     width: 25rem;
